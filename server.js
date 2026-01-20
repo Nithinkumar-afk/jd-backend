@@ -49,7 +49,8 @@ app.use("/api/profile", require("./routes/profile"));
 app.use("/api/users", require("./routes/users"));
 
 // ✅ ADMIN ROUTE (IMPORTANT)
-app.use("/api/admin/users", require("./routes/adminUsers"));
+app.use("/api/admin/users", require("./routes/users"));
+
 
 /* ================= 404 HANDLER ================= */
 app.use((req, res) => {
