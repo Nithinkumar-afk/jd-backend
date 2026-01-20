@@ -14,29 +14,42 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+/* ================= GET USER ID (FIX) ================= */
+function getUserId(req) {
+  return req.headers["x-user-id"] || req.query.userId;
+}
+
 /* ================= GET PROFILE ================= */
 router.get("/", async (req, res) => {
   try {
-    const id = req.headers["x-user-id"];
-    if (!id) return res.json({});
+    const id = getUserId(req);
+    if (!id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const [[user]] = await db.query(
-      "SELECT * FROM users WHERE id = ?",
+      "SELECT name, phone, alt_phone, address, image FROM users WHERE id = ?",
       [id]
     );
 
-    res.json(user || {});
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({});
+    console.error("GET PROFILE ERROR:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
 /* ================= UPDATE PROFILE ================= */
 router.post("/", upload.single("image"), async (req, res) => {
   try {
-    const id = req.headers["x-user-id"];
-    if (!id) return res.status(400).json({});
+    const id = getUserId(req);
+    if (!id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const { name, phone, altPhone, address } = req.body;
 
@@ -51,14 +64,16 @@ router.post("/", upload.single("image"), async (req, res) => {
     params.push(id);
 
     await db.query(
-      `UPDATE users SET name=?, phone=?, alt_phone=?, address=?${imageSql} WHERE id=?`,
+      `UPDATE users 
+       SET name=?, phone=?, alt_phone=?, address=?${imageSql}
+       WHERE id=?`,
       params
     );
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({});
+    console.error("UPDATE PROFILE ERROR:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
