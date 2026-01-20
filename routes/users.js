@@ -2,34 +2,47 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 
-const ADMIN_KEY = process.env.ADMIN_KEY;
+/* ==============================
+   ADMIN KEY CHECK MIDDLEWARE
+================================ */
+function adminAuth(req, res, next) {
+  const adminKey = req.headers["x-api-key"];
+
+  if (!adminKey || adminKey !== process.env.ADMIN_KEY) {
+    return res.status(401).json({ error: "Unauthorized admin access" });
+  }
+  next();
+}
 
 /* ==============================
    ADMIN – GET ALL USERS
 ================================ */
-router.get("/", async (req, res) => {
-  if (req.headers["x-api-key"] !== ADMIN_KEY) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
+router.get("/", adminAuth, async (req, res) => {
   try {
     const [users] = await db.query(
-      "SELECT id, name, phone, address, created_at FROM users ORDER BY id DESC"
+      `SELECT 
+        id, 
+        name, 
+        phone, 
+        alt_phone, 
+        address, 
+        image, 
+        created_at 
+       FROM users 
+       ORDER BY id DESC`
     );
+
     res.json(users);
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch users" });
   }
 });
 
 /* ==============================
    ADMIN – GET SINGLE USER
 ================================ */
-router.get("/:id", async (req, res) => {
-  if (req.headers["x-api-key"] !== ADMIN_KEY) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
+router.get("/:id", adminAuth, async (req, res) => {
   try {
     const [[user]] = await db.query(
       "SELECT * FROM users WHERE id = ?",
@@ -42,7 +55,42 @@ router.get("/:id", async (req, res) => {
 
     res.json(user);
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch user" });
+  }
+});
+
+/* ==============================
+   ADMIN – UPDATE USER
+================================ */
+router.put("/:id", adminAuth, async (req, res) => {
+  const { name, phone, alt_phone, address } = req.body;
+
+  try {
+    await db.query(
+      `UPDATE users 
+       SET name=?, phone=?, alt_phone=?, address=? 
+       WHERE id=?`,
+      [name, phone, alt_phone, address, req.params.id]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update user" });
+  }
+});
+
+/* ==============================
+   ADMIN – DELETE USER
+================================ */
+router.delete("/:id", adminAuth, async (req, res) => {
+  try {
+    await db.query("DELETE FROM users WHERE id=?", [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete user" });
   }
 });
 

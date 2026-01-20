@@ -3,70 +3,63 @@ const router = express.Router();
 const db = require("../db");
 const multer = require("multer");
 const path = require("path");
-const fs = require("fs");
 
-/* ================= UPLOAD CONFIG ================= */
-const UPLOAD_DIR = path.join(__dirname, "../uploads");
-
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR);
-}
-
+/* ================= MULTER ================= */
 const storage = multer.diskStorage({
-  destination: UPLOAD_DIR,
+  destination: "uploads/",
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `user-${req.headers["x-user-id"]}${ext}`);
+    cb(null, Date.now() + path.extname(file.originalname));
   }
 });
 
 const upload = multer({ storage });
 
-/* ================= INIT USER ================= */
-router.post("/init", async (req, res) => {
-  const [result] = await db.query("INSERT INTO users () VALUES ()");
-  res.json({ userId: result.insertId });
-});
-
 /* ================= GET PROFILE ================= */
 router.get("/", async (req, res) => {
-  const id = req.headers["x-user-id"];
-  if (!id) return res.status(400).json({});
+  try {
+    const id = req.headers["x-user-id"];
+    if (!id) return res.json({});
 
-  const [[user]] = await db.query(
-    "SELECT * FROM users WHERE id = ?",
-    [id]
-  );
+    const [[user]] = await db.query(
+      "SELECT * FROM users WHERE id = ?",
+      [id]
+    );
 
-  res.json(user || {});
+    res.json(user || {});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({});
+  }
 });
 
 /* ================= UPDATE PROFILE ================= */
-router.post("/", async (req, res) => {
-  const id = req.headers["x-user-id"];
-  const { name, phone, altPhone, address } = req.body;
+router.post("/", upload.single("image"), async (req, res) => {
+  try {
+    const id = req.headers["x-user-id"];
+    if (!id) return res.status(400).json({});
 
-  await db.query(
-    "UPDATE users SET name=?, phone=?, alt_phone=?, address=? WHERE id=?",
-    [name, phone, altPhone, address, id]
-  );
+    const { name, phone, altPhone, address } = req.body;
 
-  res.json({ success: true });
-});
+    let imageSql = "";
+    let params = [name, phone, altPhone, address];
 
-/* ================= UPLOAD IMAGE ================= */
-router.post("/image", upload.single("image"), async (req, res) => {
-  const id = req.headers["x-user-id"];
-  if (!req.file) return res.status(400).json({});
+    if (req.file) {
+      imageSql = ", image=?";
+      params.push("/uploads/" + req.file.filename);
+    }
 
-  const imagePath = `/uploads/${req.file.filename}`;
+    params.push(id);
 
-  await db.query(
-    "UPDATE users SET image=? WHERE id=?",
-    [imagePath, id]
-  );
+    await db.query(
+      `UPDATE users SET name=?, phone=?, alt_phone=?, address=?${imageSql} WHERE id=?`,
+      params
+    );
 
-  res.json({ image: imagePath });
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({});
+  }
 });
 
 module.exports = router;

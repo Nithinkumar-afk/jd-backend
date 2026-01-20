@@ -21,7 +21,11 @@ if (!fs.existsSync(uploadDir)) {
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type"]
+  allowedHeaders: [
+    "Content-Type",
+    "x-user-id",
+    "x-api-key"
+  ]
 }));
 
 app.use(express.json());
@@ -43,8 +47,9 @@ app.use("/api/products", require("./routes/products"));
 app.use("/api/orders", require("./routes/orders"));
 app.use("/api/profile", require("./routes/profile"));
 app.use("/api/users", require("./routes/users"));
-app.use("/uploads", express.static("uploads"));
 
+// ✅ ADMIN ROUTE (IMPORTANT)
+app.use("/api/admin/users", require("./routes/adminUsers"));
 
 /* ================= 404 HANDLER ================= */
 app.use((req, res) => {
