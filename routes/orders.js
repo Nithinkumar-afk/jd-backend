@@ -35,30 +35,45 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Invalid total amount" });
     }
 
-    /* INSERT ORDER */
+    /* ================= INSERT ORDER ================= */
     const [orderResult] = await db.query(
-      "INSERT INTO orders (user_id, total_amount, status) VALUES (?, ?, 'pending')",
+      `INSERT INTO orders (user_id, total_amount, status)
+       VALUES (?, ?, 'pending')`,
       [userId, Number(total)]
     );
 
     const orderId = orderResult.insertId;
 
-    /* INSERT ORDER ITEMS */
+    /* ================= INSERT ORDER ITEMS ================= */
+    let insertedCount = 0;
+
     for (const i of items) {
-      if (!i.name || !i.price || !i.quantity) continue;
+      // SUPPORT BOTH cart formats
+      const productId = i.id || i.product_id;
+      const price = Number(i.price);
+      const quantity = Number(i.qty || i.quantity || 1);
+
+      if (!productId || isNaN(price) || isNaN(quantity)) continue;
 
       await db.query(
-        "INSERT INTO order_items (order_id, name, price, quantity) VALUES (?, ?, ?, ?)",
-        [
-          orderId,
-          i.name,
-          Number(i.price),
-          Number(i.quantity)
-        ]
+        `INSERT INTO order_items (order_id, product_id, price, quantity)
+         VALUES (?, ?, ?, ?)`,
+        [orderId, productId, price, quantity]
       );
+
+      insertedCount++;
     }
 
-    res.json({ success: true, orderId });
+    if (insertedCount === 0) {
+      // rollback order
+      await db.query("DELETE FROM orders WHERE id=?", [orderId]);
+      return res.status(400).json({ error: "Invalid order items" });
+    }
+
+    res.json({
+      success: true,
+      orderId
+    });
 
   } catch (err) {
     console.error("PLACE ORDER ERROR:", err);
@@ -73,17 +88,21 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const userId = getUserId(req);
-
     if (!userId) return res.json([]);
 
     const [orders] = await db.query(
-      "SELECT * FROM orders WHERE user_id=? ORDER BY id DESC",
+      `SELECT * FROM orders
+       WHERE user_id=?
+       ORDER BY id DESC`,
       [userId]
     );
 
     for (const o of orders) {
       const [items] = await db.query(
-        "SELECT * FROM order_items WHERE order_id=?",
+        `SELECT oi.*, p.name
+         FROM order_items oi
+         LEFT JOIN products p ON p.id = oi.product_id
+         WHERE oi.order_id=?`,
         [o.id]
       );
       o.items = items;
