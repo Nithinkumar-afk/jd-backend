@@ -3,28 +3,54 @@ const router = express.Router();
 const db = require("../db");
 
 /* ==============================
+   HELPER: GET USER ID SAFELY
+================================ */
+function getUserId(req) {
+  return (
+    req.headers["x-user-id"] ||
+    req.body.userId ||
+    req.query.userId ||
+    null
+  );
+}
+
+/* ==============================
    PLACE ORDER
    POST /api/orders
 ================================ */
 router.post("/", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] || null;
+    const userId = getUserId(req);
     const { items, total } = req.body;
 
-    if (!Array.isArray(items) || !items.length) {
+    if (!userId) {
+      return res.status(401).json({ error: "User not logged in" });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Order items required" });
     }
 
-    const [order] = await db.query(
+    if (!total || isNaN(total)) {
+      return res.status(400).json({ error: "Invalid total amount" });
+    }
+
+    /* INSERT ORDER */
+    const [orderResult] = await db.query(
       "INSERT INTO orders (user_id, total_amount, status) VALUES (?, ?, 'pending')",
       [userId, Number(total)]
     );
 
+    const orderId = orderResult.insertId;
+
+    /* INSERT ORDER ITEMS */
     for (const i of items) {
+      if (!i.name || !i.price || !i.quantity) continue;
+
       await db.query(
         "INSERT INTO order_items (order_id, name, price, quantity) VALUES (?, ?, ?, ?)",
         [
-          order.insertId,
+          orderId,
           i.name,
           Number(i.price),
           Number(i.quantity)
@@ -32,7 +58,7 @@ router.post("/", async (req, res) => {
       );
     }
 
-    res.json({ success: true, orderId: order.insertId });
+    res.json({ success: true, orderId });
 
   } catch (err) {
     console.error("PLACE ORDER ERROR:", err);
@@ -46,7 +72,7 @@ router.post("/", async (req, res) => {
 ================================ */
 router.get("/", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"];
+    const userId = getUserId(req);
 
     if (!userId) return res.json([]);
 
@@ -102,6 +128,10 @@ router.get("/admin", async (req, res) => {
 router.put("/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ error: "Status required" });
+    }
 
     await db.query(
       "UPDATE orders SET status=? WHERE id=?",
