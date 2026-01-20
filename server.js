@@ -43,6 +43,8 @@ app.use("/api/products", require("./routes/products"));
 app.use("/api/orders", require("./routes/orders"));
 app.use("/api/profile", require("./routes/profile"));
 app.use("/api/users", require("./routes/users"));
+app.use("/uploads", express.static("uploads"));
+
 
 /* ================= 404 HANDLER ================= */
 app.use((req, res) => {
