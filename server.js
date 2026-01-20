@@ -5,29 +5,32 @@ const path = require("path");
 const fs = require("fs");
 
 const app = express();
+
+/* ================= PORT ================= */
 const PORT = process.env.PORT || 8080;
 
-/* ================= ENSURE UPLOAD DIR ================= */
+/* ================= ENSURE UPLOADS DIR ================= */
 const uploadDir = path.join(__dirname, "uploads");
+
 if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
+  fs.mkdirSync(uploadDir, { recursive: true });
   console.log("📁 uploads folder created");
 }
 
 /* ================= MIDDLEWARE ================= */
 app.use(cors({
   origin: "*",
-  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type","x-api-key"]
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type"]
 }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= STATIC ================= */
+/* ================= STATIC FILES ================= */
 app.use("/uploads", express.static(uploadDir));
 
-/* ================= ROOT ================= */
+/* ================= ROOT ROUTE ================= */
 app.get("/", (req, res) => {
   res.json({
     status: "Backend running 🚀",
@@ -35,22 +38,30 @@ app.get("/", (req, res) => {
   });
 });
 
-/* ================= ROUTES ================= */
+/* ================= API ROUTES ================= */
 app.use("/api/products", require("./routes/products"));
 app.use("/api/orders", require("./routes/orders"));
 app.use("/api/profile", require("./routes/profile"));
 app.use("/api/users", require("./routes/users"));
 
-/* ================= ERROR HANDLER ================= */
-app.use((err, req, res, next) => {
-  console.error("🔥 ERROR:", err);
-  res.status(500).json({
+/* ================= 404 HANDLER ================= */
+app.use((req, res) => {
+  res.status(404).json({
     success: false,
-    message: "Internal server error"
+    message: "Route not found"
   });
 });
 
-/* ================= START ================= */
+/* ================= GLOBAL ERROR HANDLER ================= */
+app.use((err, req, res, next) => {
+  console.error("🔥 SERVER ERROR:", err);
+  res.status(500).json({
+    success: false,
+    message: "Internal Server Error"
+  });
+});
+
+/* ================= START SERVER ================= */
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server running on port ${PORT}`);
 });

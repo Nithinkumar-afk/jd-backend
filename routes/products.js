@@ -5,76 +5,98 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-/* ================= ADMIN KEY ================= */
-// HARD FALLBACK (IMPORTANT)
-const ADMIN_KEY = process.env.ADMIN_KEY || "JD_ADMIN_SECRET_2026";
+/* ================= UPLOAD DIR ================= */
+const uploadDir = path.join(__dirname, "..", "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
 
-/* ================= UPLOAD CONFIG ================= */
+/* ================= IMAGE UPLOAD ================= */
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = "uploads";
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
+  destination: (_, __, cb) => cb(null, uploadDir),
+  filename: (_, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
   }
 });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
-});
-
-/* ================= AUTH MIDDLEWARE ================= */
-function adminAuth(req, res, next) {
-  if (req.headers["x-api-key"] !== ADMIN_KEY) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
-}
+const upload = multer({ storage });
 
 /* ================= GET PRODUCTS ================= */
 router.get("/", async (req, res) => {
   try {
-    const [rows] = await db.query("SELECT * FROM products ORDER BY id DESC");
+    const [rows] = await db.query(
+      "SELECT * FROM products ORDER BY id DESC"
+    );
     res.json(rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "DB error" });
+    console.error("GET PRODUCTS ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch products" });
   }
 });
 
 /* ================= ADD PRODUCT ================= */
-router.post("/", adminAuth, upload.single("image"), async (req, res) => {
+router.post("/", upload.single("image"), async (req, res) => {
   try {
     const { name, price, description } = req.body;
+
     if (!name || !price) {
-      return res.status(400).json({ error: "Missing fields" });
+      return res.status(400).json({
+        error: "Name and price required"
+      });
     }
 
-    const image = req.file ? `/uploads/${req.file.filename}` : "";
+    const image = req.file
+      ? "/uploads/" + req.file.filename
+      : "";
 
     await db.query(
-      "INSERT INTO products (name,price,description,image) VALUES (?,?,?,?)",
-      [name, price, description || "", image]
+      "INSERT INTO products (name, price, description, image) VALUES (?, ?, ?, ?)",
+      [
+        name.trim(),
+        Number(price),
+        description || "",
+        image
+      ]
     );
 
     res.json({ success: true });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Insert failed" });
+    console.error("ADD PRODUCT ERROR:", err);
+    res.status(500).json({ error: "Failed to add product" });
   }
 });
 
 /* ================= DELETE PRODUCT ================= */
-router.delete("/:id", adminAuth, async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
-    await db.query("DELETE FROM products WHERE id=?", [req.params.id]);
+    /* get image first */
+    const [[product]] = await db.query(
+      "SELECT image FROM products WHERE id = ?",
+      [req.params.id]
+    );
+
+    /* delete db row */
+    await db.query(
+      "DELETE FROM products WHERE id = ?",
+      [req.params.id]
+    );
+
+    /* delete image file */
+    if (product?.image) {
+      const imgPath = path.join(
+        __dirname,
+        "..",
+        product.image
+      );
+      if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+    }
+
     res.json({ success: true });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Delete failed" });
+    console.error("DELETE PRODUCT ERROR:", err);
+    res.status(500).json({ error: "Failed to delete product" });
   }
 });
 
