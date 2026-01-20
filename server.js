@@ -14,18 +14,29 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ================= STATIC FILES =================
-// serve uploaded images
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ================= API ROUTES =================
+// ================= ROOT ROUTE (VERY IMPORTANT) =================
+app.get("/", (req, res) => {
+  res.json({
+    status: "Backend is running 🚀",
+    time: new Date()  // ✅ Added server time
+  });
+});
+
+// ================= ROUTES =================
 app.use("/api/products", require("./routes/products"));
 app.use("/api/orders", require("./routes/orders"));
 app.use("/api/profile", require("./routes/profile"));
 app.use("/api/users", require("./routes/users"));
 
-// ================= ROOT HEALTH CHECK =================
-app.get("/", (req, res) => {
-  res.send("✅ JD Backend API is running");
+// ================= GLOBAL ERROR HANDLER =================
+app.use((err, req, res, next) => {
+  console.error("🔥 Server Error:", err);
+  res.status(500).json({
+    success: false,
+    message: "Internal Server Error",
+  });
 });
 
 // ================= START SERVER =================
