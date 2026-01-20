@@ -17,14 +17,5 @@
     "express": "^5.2.1",
     "multer": "^2.0.2",
     "mysql2": "^3.16.1"
-  },
-  "devDependencies": {},
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Nithinkumar-afk/jd-backend.git"
-  },
-  "bugs": {
-    "url": "https://github.com/Nithinkumar-afk/jd-backend/issues"
-  },
-  "homepage": "https://github.com/Nithinkumar-afk/jd-backend#readme"
+  }
 }
