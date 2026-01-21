@@ -3,15 +3,23 @@ const router = express.Router();
 const db = require("../db");
 
 /* ==============================
-   HELPER: GET USER ID (SAFE)
+   HELPER: GET USER ID (SAFE + DEBUG)
 ================================ */
 function getUserId(req) {
-  return (
+  const uid =
     req.headers["x-user-id"] ||
     req.body?.userId ||
     req.query?.userId ||
-    null
-  );
+    null;
+
+  if (!uid) {
+    console.error("❌ USER ID MISSING", {
+      headers: req.headers,
+      body: req.body
+    });
+  }
+
+  return uid;
 }
 
 /* ==============================
@@ -214,8 +222,14 @@ router.put("/:id/status", async (req, res) => {
 ================================ */
 router.delete("/:id", async (req, res) => {
   try {
-    await db.query(`DELETE FROM order_items WHERE order_id=?`, [req.params.id]);
-    await db.query(`DELETE FROM orders WHERE id=?`, [req.params.id]);
+    await db.query(
+      `DELETE FROM order_items WHERE order_id=?`,
+      [req.params.id]
+    );
+    await db.query(
+      `DELETE FROM orders WHERE id=?`,
+      [req.params.id]
+    );
 
     res.json({ success: true });
   } catch (err) {
