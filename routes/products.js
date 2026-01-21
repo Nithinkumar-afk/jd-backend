@@ -15,7 +15,7 @@ if (!fs.existsSync(uploadDir)) {
 const storage = multer.diskStorage({
   destination: (_, __, cb) => cb(null, uploadDir),
   filename: (_, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
+    cb(null, Date.now() + "-" + Math.round(Math.random()*1e9) + path.extname(file.originalname));
   }
 });
 
@@ -34,63 +34,73 @@ router.get("/", async (req, res) => {
   }
 });
 
-/* ================= ADD PRODUCT ================= */
-router.post("/", upload.single("image"), async (req, res) => {
-  try {
-    const { name, price, description } = req.body;
+/* ================= ADD PRODUCT (3 IMAGES) ================= */
+router.post(
+  "/",
+  upload.fields([
+    { name: "image",  maxCount: 1 },
+    { name: "image2", maxCount: 1 },
+    { name: "image3", maxCount: 1 }
+  ]),
+  async (req, res) => {
+    try {
+      const { name, price, description } = req.body;
 
-    if (!name || !price) {
-      return res.status(400).json({
-        error: "Name and price required"
-      });
+      if (!name || !price) {
+        return res.status(400).json({
+          error: "Name and price required"
+        });
+      }
+
+      const files = req.files || {};
+
+      const image  = files.image  ? "/uploads/" + files.image[0].filename  : "";
+      const image2 = files.image2 ? "/uploads/" + files.image2[0].filename : "";
+      const image3 = files.image3 ? "/uploads/" + files.image3[0].filename : "";
+
+      await db.query(
+        `INSERT INTO products 
+         (name, price, description, image, image2, image3)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          name.trim(),
+          Number(price),
+          description || "",
+          image,
+          image2,
+          image3
+        ]
+      );
+
+      res.json({ success: true });
+
+    } catch (err) {
+      console.error("ADD PRODUCT ERROR:", err);
+      res.status(500).json({ error: "Failed to add product" });
     }
-
-    const image = req.file
-      ? "/uploads/" + req.file.filename
-      : "";
-
-    await db.query(
-      "INSERT INTO products (name, price, description, image) VALUES (?, ?, ?, ?)",
-      [
-        name.trim(),
-        Number(price),
-        description || "",
-        image
-      ]
-    );
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error("ADD PRODUCT ERROR:", err);
-    res.status(500).json({ error: "Failed to add product" });
   }
-});
+);
 
 /* ================= DELETE PRODUCT ================= */
 router.delete("/:id", async (req, res) => {
   try {
-    /* get image first */
     const [[product]] = await db.query(
-      "SELECT image FROM products WHERE id = ?",
+      "SELECT image, image2, image3 FROM products WHERE id = ?",
       [req.params.id]
     );
 
-    /* delete db row */
     await db.query(
       "DELETE FROM products WHERE id = ?",
       [req.params.id]
     );
 
-    /* delete image file */
-    if (product?.image) {
-      const imgPath = path.join(
-        __dirname,
-        "..",
-        product.image
-      );
-      if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-    }
+    /* delete all images */
+    [product?.image, product?.image2, product?.image3].forEach(img => {
+      if (img) {
+        const imgPath = path.join(__dirname, "..", img);
+        if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+      }
+    });
 
     res.json({ success: true });
 
