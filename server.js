@@ -3,6 +3,11 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
+const adminUsers = require("./routes/adminUsers");
+
+
+
+
 
 const app = express();
 
@@ -47,6 +52,7 @@ app.use("/api/products", require("./routes/products"));
 app.use("/api/orders", require("./routes/orders"));
 app.use("/api/profile", require("./routes/profile"));
 app.use("/api/users", require("./routes/users"));
+app.use("/api/admin", adminUsers);
 
 // ✅ ADMIN ROUTE (IMPORTANT)
 app.use("/api/admin/users", require("./routes/users"));
