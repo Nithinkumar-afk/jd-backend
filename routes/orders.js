@@ -3,23 +3,15 @@ const router = express.Router();
 const db = require("../db");
 
 /* ==============================
-   HELPER: GET USER ID (SAFE + DEBUG)
+   HELPER: GET USER ID
 ================================ */
 function getUserId(req) {
-  const uid =
+  return (
     req.headers["x-user-id"] ||
     req.body?.userId ||
     req.query?.userId ||
-    null;
-
-  if (!uid) {
-    console.error("❌ USER ID MISSING", {
-      headers: req.headers,
-      body: req.body
-    });
-  }
-
-  return uid;
+    null
+  );
 }
 
 /* ==============================
@@ -28,6 +20,7 @@ function getUserId(req) {
 ================================ */
 router.post("/", async (req, res) => {
   const conn = await db.getConnection();
+
   try {
     const userId = getUserId(req);
     const { items, total } = req.body;
@@ -47,8 +40,9 @@ router.post("/", async (req, res) => {
 
     await conn.beginTransaction();
 
+    /* CREATE ORDER */
     const [orderResult] = await conn.query(
-      `INSERT INTO orders (user_id, total_amount, status)
+      `INSERT INTO orders (user_id, total, status)
        VALUES (?, ?, ?)`,
       [userId, orderTotal, "Placed"]
     );
@@ -56,17 +50,18 @@ router.post("/", async (req, res) => {
     const orderId = orderResult.insertId;
     let inserted = 0;
 
-    for (const i of items) {
-      const productId = i.product_id || i.id;
-      const price = Number(i.price);
-      const quantity = Number(i.quantity || i.qty || 1);
+    /* INSERT ITEMS */
+    for (const item of items) {
+      const name = item.name;
+      const price = Number(item.price);
+      const quantity = Number(item.qty || item.quantity || 1);
 
-      if (!productId || price <= 0 || quantity <= 0) continue;
+      if (!name || price <= 0 || quantity <= 0) continue;
 
       await conn.query(
-        `INSERT INTO order_items (order_id, product_id, price, quantity)
+        `INSERT INTO order_items (order_id, name, price, quantity)
          VALUES (?, ?, ?, ?)`,
-        [orderId, productId, price, quantity]
+        [orderId, name, price, quantity]
       );
 
       inserted++;
@@ -107,16 +102,16 @@ router.get("/", async (req, res) => {
 
     for (const o of orders) {
       const [items] = await db.query(
-        `SELECT oi.*, p.name
-         FROM order_items oi
-         LEFT JOIN products p ON p.id = oi.product_id
-         WHERE oi.order_id=?`,
+        `SELECT name, price, quantity AS qty
+         FROM order_items
+         WHERE order_id=?`,
         [o.id]
       );
       o.items = items;
     }
 
     res.json(orders);
+
   } catch (err) {
     console.error("GET USER ORDERS ERROR:", err);
     res.status(500).json({ error: "Failed to load orders" });
@@ -135,16 +130,16 @@ router.get("/admin", async (req, res) => {
 
     for (const o of orders) {
       const [items] = await db.query(
-        `SELECT oi.*, p.name
-         FROM order_items oi
-         LEFT JOIN products p ON p.id = oi.product_id
-         WHERE oi.order_id=?`,
+        `SELECT name, price, quantity AS qty
+         FROM order_items
+         WHERE order_id=?`,
         [o.id]
       );
       o.items = items;
     }
 
     res.json(orders);
+
   } catch (err) {
     console.error("ADMIN ORDERS ERROR:", err);
     res.status(500).json({ error: "Failed to load admin orders" });
@@ -175,10 +170,9 @@ router.get("/:id", async (req, res) => {
     }
 
     const [items] = await db.query(
-      `SELECT oi.*, p.name
-       FROM order_items oi
-       LEFT JOIN products p ON p.id = oi.product_id
-       WHERE oi.order_id=?`,
+      `SELECT name, price, quantity AS qty
+       FROM order_items
+       WHERE order_id=?`,
       [orderId]
     );
 
@@ -210,6 +204,7 @@ router.put("/:id/status", async (req, res) => {
     );
 
     res.json({ success: true });
+
   } catch (err) {
     console.error("UPDATE STATUS ERROR:", err);
     res.status(500).json({ error: "Failed to update status" });
@@ -232,6 +227,7 @@ router.delete("/:id", async (req, res) => {
     );
 
     res.json({ success: true });
+
   } catch (err) {
     console.error("DELETE ORDER ERROR:", err);
     res.status(500).json({ error: "Failed to delete order" });
