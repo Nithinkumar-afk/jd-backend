@@ -40,9 +40,9 @@ router.post("/", async (req, res) => {
 
     await conn.beginTransaction();
 
-    /* CREATE ORDER */
+    /* ✅ FIXED COLUMN NAME */
     const [orderResult] = await conn.query(
-      `INSERT INTO orders (user_id, total, status)
+      `INSERT INTO orders (user_id, total_amount, status)
        VALUES (?, ?, ?)`,
       [userId, orderTotal, "Placed"]
     );
@@ -50,7 +50,7 @@ router.post("/", async (req, res) => {
     const orderId = orderResult.insertId;
     let inserted = 0;
 
-    /* INSERT ITEMS */
+    /* INSERT ORDER ITEMS */
     for (const item of items) {
       const name = item.name;
       const price = Number(item.price);
@@ -86,7 +86,6 @@ router.post("/", async (req, res) => {
 
 /* ==============================
    GET USER ORDERS
-   GET /api/orders
 ================================ */
 router.get("/", async (req, res) => {
   try {
@@ -120,7 +119,6 @@ router.get("/", async (req, res) => {
 
 /* ==============================
    ADMIN – GET ALL ORDERS
-   GET /api/orders/admin
 ================================ */
 router.get("/admin", async (req, res) => {
   try {
@@ -148,7 +146,6 @@ router.get("/admin", async (req, res) => {
 
 /* ==============================
    GET SINGLE ORDER (USER)
-   GET /api/orders/:id
 ================================ */
 router.get("/:id", async (req, res) => {
   try {
@@ -187,7 +184,6 @@ router.get("/:id", async (req, res) => {
 
 /* ==============================
    ADMIN – UPDATE STATUS
-   PUT /api/orders/:id/status
 ================================ */
 router.put("/:id/status", async (req, res) => {
   try {
@@ -213,7 +209,6 @@ router.put("/:id/status", async (req, res) => {
 
 /* ==============================
    ADMIN – DELETE ORDER
-   DELETE /api/orders/:id
 ================================ */
 router.delete("/:id", async (req, res) => {
   try {
