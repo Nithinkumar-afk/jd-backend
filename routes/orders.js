@@ -24,13 +24,18 @@ router.post("/", async (req, res) => {
     const userId = getUserId(req);
     const { items, total } = req.body;
 
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-    if (!Array.isArray(items) || items.length === 0)
+    if (!userId) {
+      return res.status(400).json({ error: "User ID required" });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Order items required" });
+    }
 
     const orderTotal = Number(total);
-    if (isNaN(orderTotal) || orderTotal <= 0)
+    if (isNaN(orderTotal) || orderTotal <= 0) {
       return res.status(400).json({ error: "Invalid total amount" });
+    }
 
     await conn.beginTransaction();
 
@@ -61,7 +66,7 @@ router.post("/", async (req, res) => {
 
     if (inserted === 0) {
       await conn.rollback();
-      return res.status(400).json({ error: "No valid items" });
+      return res.status(400).json({ error: "No valid order items" });
     }
 
     await conn.commit();
@@ -86,7 +91,9 @@ router.get("/", async (req, res) => {
     if (!userId) return res.json([]);
 
     const [orders] = await db.query(
-      `SELECT * FROM orders WHERE user_id=? ORDER BY id DESC`,
+      `SELECT * FROM orders
+       WHERE user_id=?
+       ORDER BY id DESC`,
       [userId]
     );
 
@@ -103,22 +110,17 @@ router.get("/", async (req, res) => {
 
     res.json(orders);
   } catch (err) {
-    console.error(err);
+    console.error("GET USER ORDERS ERROR:", err);
     res.status(500).json({ error: "Failed to load orders" });
   }
 });
 
 /* ==============================
-   ADMIN – GET ALL ORDERS
+   ADMIN (OPEN) – GET ALL ORDERS
    GET /api/orders/admin
 ================================ */
 router.get("/admin", async (req, res) => {
   try {
-    const adminKey = req.headers["x-api-key"];
-    if (adminKey !== process.env.ADMIN_API_KEY) {
-      return res.status(401).json({ error: "Unauthorized admin" });
-    }
-
     const [orders] = await db.query(
       `SELECT * FROM orders ORDER BY id DESC`
     );
@@ -142,7 +144,7 @@ router.get("/admin", async (req, res) => {
 });
 
 /* ==============================
-   GET SINGLE ORDER
+   GET SINGLE ORDER (USER)
    GET /api/orders/:id
 ================================ */
 router.get("/:id", async (req, res) => {
@@ -150,14 +152,19 @@ router.get("/:id", async (req, res) => {
     const userId = getUserId(req);
     const orderId = req.params.id;
 
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!userId) {
+      return res.status(400).json({ error: "User ID required" });
+    }
 
     const [[order]] = await db.query(
-      `SELECT * FROM orders WHERE id=? AND user_id=?`,
+      `SELECT * FROM orders
+       WHERE id=? AND user_id=?`,
       [orderId, userId]
     );
 
-    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
 
     const [items] = await db.query(
       `SELECT oi.*, p.name
@@ -169,23 +176,19 @@ router.get("/:id", async (req, res) => {
 
     order.items = items;
     res.json(order);
+
   } catch (err) {
-    console.error(err);
+    console.error("GET ORDER ERROR:", err);
     res.status(500).json({ error: "Failed to load order" });
   }
 });
 
 /* ==============================
-   ADMIN – UPDATE ORDER STATUS
+   ADMIN (OPEN) – UPDATE STATUS
    PUT /api/orders/:id/status
 ================================ */
 router.put("/:id/status", async (req, res) => {
   try {
-    const adminKey = req.headers["x-api-key"];
-    if (adminKey !== process.env.ADMIN_API_KEY) {
-      return res.status(401).json({ error: "Unauthorized admin" });
-    }
-
     const { status } = req.body;
     const valid = ["PLACED", "SHIPPED", "DELIVERED", "CANCELLED"];
 
@@ -200,28 +203,23 @@ router.put("/:id/status", async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("UPDATE STATUS ERROR:", err);
     res.status(500).json({ error: "Failed to update status" });
   }
 });
 
 /* ==============================
-   ADMIN – DELETE ORDER
+   ADMIN (OPEN) – DELETE ORDER
    DELETE /api/orders/:id
 ================================ */
 router.delete("/:id", async (req, res) => {
   try {
-    const adminKey = req.headers["x-api-key"];
-    if (adminKey !== process.env.ADMIN_API_KEY) {
-      return res.status(401).json({ error: "Unauthorized admin" });
-    }
-
     await db.query(`DELETE FROM order_items WHERE order_id=?`, [req.params.id]);
     await db.query(`DELETE FROM orders WHERE id=?`, [req.params.id]);
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("DELETE ORDER ERROR:", err);
     res.status(500).json({ error: "Failed to delete order" });
   }
 });
