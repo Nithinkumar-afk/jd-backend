@@ -16,6 +16,7 @@ function getUserId(req) {
 
 /* ==============================
    PLACE ORDER
+   POST /api/orders
 ================================ */
 router.post("/", async (req, res) => {
   let conn;
@@ -41,8 +42,9 @@ router.post("/", async (req, res) => {
 
     await conn.beginTransaction();
 
+    /* CREATE ORDER */
     const [orderResult] = await conn.query(
-      `INSERT INTO orders (user_id, total, status)
+      `INSERT INTO orders (user_id, total_amount, status)
        VALUES (?, ?, ?)`,
       [userId, orderTotal, "PLACED"]
     );
@@ -50,17 +52,18 @@ router.post("/", async (req, res) => {
     const orderId = orderResult.insertId;
     let inserted = 0;
 
+    /* INSERT ITEMS */
     for (const item of items) {
       const name = item.name;
       const price = Number(item.price);
-      const qty = Number(item.qty || item.quantity || 1);
+      const quantity = Number(item.qty || item.quantity || 1);
 
-      if (!name || price <= 0 || qty <= 0) continue;
+      if (!name || price <= 0 || quantity <= 0) continue;
 
       await conn.query(
         `INSERT INTO order_items (order_id, name, price, quantity)
          VALUES (?, ?, ?, ?)`,
-        [orderId, name, price, qty]
+        [orderId, name, price, quantity]
       );
 
       inserted++;
@@ -84,7 +87,8 @@ router.post("/", async (req, res) => {
 });
 
 /* ==============================
-   USER – GET ORDERS
+   GET USER ORDERS
+   GET /api/orders
 ================================ */
 router.get("/", async (req, res) => {
   try {
@@ -92,20 +96,24 @@ router.get("/", async (req, res) => {
     if (!userId) return res.json([]);
 
     const [orders] = await db.query(
-      `SELECT * FROM orders WHERE user_id=? ORDER BY id DESC`,
+      `SELECT * FROM orders
+       WHERE user_id=?
+       ORDER BY id DESC`,
       [userId]
     );
 
     for (const o of orders) {
       const [items] = await db.query(
         `SELECT name, price, quantity AS qty
-         FROM order_items WHERE order_id=?`,
+         FROM order_items
+         WHERE order_id=?`,
         [o.id]
       );
       o.items = items;
     }
 
     res.json(orders);
+
   } catch (err) {
     console.error("GET USER ORDERS ERROR:", err);
     res.status(500).json({ error: "Failed to load orders" });
@@ -114,8 +122,9 @@ router.get("/", async (req, res) => {
 
 /* ==============================
    ADMIN – GET ALL ORDERS
+   GET /api/orders/admin
 ================================ */
-router.get("/admin", async (_req, res) => {
+router.get("/admin", async (req, res) => {
   try {
     const [orders] = await db.query(
       `SELECT * FROM orders ORDER BY id DESC`
@@ -124,13 +133,15 @@ router.get("/admin", async (_req, res) => {
     for (const o of orders) {
       const [items] = await db.query(
         `SELECT name, price, quantity AS qty
-         FROM order_items WHERE order_id=?`,
+         FROM order_items
+         WHERE order_id=?`,
         [o.id]
       );
       o.items = items;
     }
 
     res.json(orders);
+
   } catch (err) {
     console.error("ADMIN ORDERS ERROR:", err);
     res.status(500).json({ error: "Failed to load admin orders" });
@@ -138,28 +149,70 @@ router.get("/admin", async (_req, res) => {
 });
 
 /* ==============================
+   GET SINGLE ORDER (USER)
+   GET /api/orders/:id
+================================ */
+router.get("/:id", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const orderId = req.params.id;
+
+    if (!userId) {
+      return res.status(400).json({ error: "User ID required" });
+    }
+
+    const [[order]] = await db.query(
+      `SELECT * FROM orders
+       WHERE id=? AND user_id=?`,
+      [orderId, userId]
+    );
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const [items] = await db.query(
+      `SELECT name, price, quantity AS qty
+       FROM order_items
+       WHERE order_id=?`,
+      [orderId]
+    );
+
+    order.items = items;
+    res.json(order);
+
+  } catch (err) {
+    console.error("GET ORDER ERROR:", err);
+    res.status(500).json({ error: "Failed to load order" });
+  }
+});
+
+/* ==============================
    ADMIN – UPDATE STATUS
+   PUT /api/orders/:id/status
 ================================ */
 router.put("/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
-    const orderId = req.params.id;
 
-    const VALID = ["PLACED", "SHIPPED", "DELIVERED", "CANCELLED"];
-    if (!VALID.includes(status)) {
+    const VALID_STATUSES = [
+      "PLACED",
+      "SHIPPED",
+      "DELIVERED",
+      "CANCELLED"
+    ];
+
+    if (!VALID_STATUSES.includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
     }
 
-    const [result] = await db.query(
+    await db.query(
       `UPDATE orders SET status=? WHERE id=?`,
-      [status, orderId]
+      [status, req.params.id]
     );
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Order not found" });
-    }
-
     res.json({ success: true });
+
   } catch (err) {
     console.error("UPDATE STATUS ERROR:", err);
     res.status(500).json({ error: "Failed to update status" });
@@ -168,26 +221,21 @@ router.put("/:id/status", async (req, res) => {
 
 /* ==============================
    ADMIN – DELETE ORDER
+   DELETE /api/orders/:id
 ================================ */
 router.delete("/:id", async (req, res) => {
   try {
-    const orderId = req.params.id;
-
     await db.query(
       `DELETE FROM order_items WHERE order_id=?`,
-      [orderId]
+      [req.params.id]
     );
-
-    const [result] = await db.query(
+    await db.query(
       `DELETE FROM orders WHERE id=?`,
-      [orderId]
+      [req.params.id]
     );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Order not found" });
-    }
 
     res.json({ success: true });
+
   } catch (err) {
     console.error("DELETE ORDER ERROR:", err);
     res.status(500).json({ error: "Failed to delete order" });
