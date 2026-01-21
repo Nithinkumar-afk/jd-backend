@@ -11,69 +11,59 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + path.extname(file.originalname));
   }
 });
-
 const upload = multer({ storage });
 
-/* ================= GET USER ID (FIX) ================= */
+/* ================= USER ID ================= */
 function getUserId(req) {
-  return req.headers["x-user-id"] || req.query.userId;
+  return req.headers["x-user-id"];
 }
 
 /* ================= GET PROFILE ================= */
 router.get("/", async (req, res) => {
   try {
     const id = getUserId(req);
-    if (!id) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!id) return res.json({});
 
     const [[user]] = await db.query(
-      "SELECT name, phone, alt_phone, address, image FROM users WHERE id = ?",
+      "SELECT name, phone, alt_phone, address, image FROM users WHERE id=?",
       [id]
     );
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.json(user);
+    res.json(user || {});
   } catch (err) {
-    console.error("GET PROFILE ERROR:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ================= UPDATE PROFILE ================= */
+/* ================= SAVE PROFILE (UPSERT) ================= */
 router.post("/", upload.single("image"), async (req, res) => {
   try {
     const id = getUserId(req);
-    if (!id) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!id) return res.status(400).json({ error: "No user id" });
 
-    const { name, phone, altPhone, address } = req.body;
+    const { name, phone, alt_phone, address } = req.body;
 
-    let imageSql = "";
-    let params = [name, phone, altPhone, address];
-
-    if (req.file) {
-      imageSql = ", image=?";
-      params.push("/uploads/" + req.file.filename);
-    }
-
-    params.push(id);
+    let image = null;
+    if (req.file) image = "/uploads/" + req.file.filename;
 
     await db.query(
-      `UPDATE users 
-       SET name=?, phone=?, alt_phone=?, address=?${imageSql}
-       WHERE id=?`,
-      params
+      `INSERT INTO users (id, name, phone, alt_phone, address, image)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         name=VALUES(name),
+         phone=VALUES(phone),
+         alt_phone=VALUES(alt_phone),
+         address=VALUES(address),
+         image=IFNULL(VALUES(image), image)`,
+      [id, name, phone, alt_phone, address, image]
     );
 
     res.json({ success: true });
+
   } catch (err) {
-    console.error("UPDATE PROFILE ERROR:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("PROFILE SAVE ERROR:", err);
+    res.status(500).json({ error: "Save failed" });
   }
 });
 

@@ -15,23 +15,14 @@ function adminAuth(req, res, next) {
 }
 
 /* ==============================
-   ADMIN – GET ALL USERS
+   PUBLIC – GET ALL USERS (FIXED)
+   ❌ NO ADMIN AUTH
 ================================ */
-router.get("/", adminAuth, async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const [users] = await db.query(
-      `SELECT 
-        id, 
-        name, 
-        phone, 
-        alt_phone, 
-        address, 
-        image, 
-        created_at 
-       FROM users 
-       ORDER BY id DESC`
+      "SELECT name, phone, address, image FROM users ORDER BY created_at DESC"
     );
-
     res.json(users);
   } catch (err) {
     console.error(err);
