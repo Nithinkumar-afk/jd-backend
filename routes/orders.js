@@ -19,9 +19,11 @@ function getUserId(req) {
    POST /api/orders
 ================================ */
 router.post("/", async (req, res) => {
-  const conn = await db.getConnection();
+  let conn;
 
   try {
+    conn = await db.getConnection();
+
     const userId = getUserId(req);
     const { items, total } = req.body;
 
@@ -40,17 +42,17 @@ router.post("/", async (req, res) => {
 
     await conn.beginTransaction();
 
-    /* ✅ FIXED COLUMN NAME */
+    /* CREATE ORDER */
     const [orderResult] = await conn.query(
       `INSERT INTO orders (user_id, total_amount, status)
        VALUES (?, ?, ?)`,
-      [userId, orderTotal, "Placed"]
+      [userId, orderTotal, "PLACED"]
     );
 
     const orderId = orderResult.insertId;
     let inserted = 0;
 
-    /* INSERT ORDER ITEMS */
+    /* INSERT ITEMS */
     for (const item of items) {
       const name = item.name;
       const price = Number(item.price);
@@ -76,16 +78,17 @@ router.post("/", async (req, res) => {
     res.json({ success: true, orderId });
 
   } catch (err) {
-    await conn.rollback();
+    if (conn) await conn.rollback();
     console.error("PLACE ORDER ERROR:", err);
     res.status(500).json({ error: "Failed to place order" });
   } finally {
-    conn.release();
+    if (conn) conn.release();
   }
 });
 
 /* ==============================
    GET USER ORDERS
+   GET /api/orders
 ================================ */
 router.get("/", async (req, res) => {
   try {
@@ -119,6 +122,7 @@ router.get("/", async (req, res) => {
 
 /* ==============================
    ADMIN – GET ALL ORDERS
+   GET /api/orders/admin
 ================================ */
 router.get("/admin", async (req, res) => {
   try {
@@ -146,6 +150,7 @@ router.get("/admin", async (req, res) => {
 
 /* ==============================
    GET SINGLE ORDER (USER)
+   GET /api/orders/:id
 ================================ */
 router.get("/:id", async (req, res) => {
   try {
@@ -184,13 +189,20 @@ router.get("/:id", async (req, res) => {
 
 /* ==============================
    ADMIN – UPDATE STATUS
+   PUT /api/orders/:id/status
 ================================ */
 router.put("/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
-    const valid = ["Placed", "Shipped", "Delivered", "Cancelled"];
 
-    if (!valid.includes(status)) {
+    const VALID_STATUSES = [
+      "PLACED",
+      "SHIPPED",
+      "DELIVERED",
+      "CANCELLED"
+    ];
+
+    if (!VALID_STATUSES.includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
     }
 
@@ -209,6 +221,7 @@ router.put("/:id/status", async (req, res) => {
 
 /* ==============================
    ADMIN – DELETE ORDER
+   DELETE /api/orders/:id
 ================================ */
 router.delete("/:id", async (req, res) => {
   try {
