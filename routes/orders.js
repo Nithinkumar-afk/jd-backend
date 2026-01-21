@@ -49,8 +49,8 @@ router.post("/", async (req, res) => {
 
     const [orderResult] = await conn.query(
       `INSERT INTO orders (user_id, total_amount, status)
-       VALUES (?, ?, 'PLACED')`,
-      [userId, orderTotal]
+       VALUES (?, ?, ?)`,
+      [userId, orderTotal, "Placed"]
     );
 
     const orderId = orderResult.insertId;
@@ -124,7 +124,7 @@ router.get("/", async (req, res) => {
 });
 
 /* ==============================
-   ADMIN (OPEN) – GET ALL ORDERS
+   ADMIN – GET ALL ORDERS
    GET /api/orders/admin
 ================================ */
 router.get("/admin", async (req, res) => {
@@ -192,13 +192,13 @@ router.get("/:id", async (req, res) => {
 });
 
 /* ==============================
-   ADMIN (OPEN) – UPDATE STATUS
+   ADMIN – UPDATE STATUS
    PUT /api/orders/:id/status
 ================================ */
 router.put("/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
-    const valid = ["PLACED", "SHIPPED", "DELIVERED", "CANCELLED"];
+    const valid = ["Placed", "Shipped", "Delivered", "Cancelled"];
 
     if (!valid.includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
@@ -217,7 +217,7 @@ router.put("/:id/status", async (req, res) => {
 });
 
 /* ==============================
-   ADMIN (OPEN) – DELETE ORDER
+   ADMIN – DELETE ORDER
    DELETE /api/orders/:id
 ================================ */
 router.delete("/:id", async (req, res) => {
